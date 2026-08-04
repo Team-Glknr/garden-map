@@ -44,6 +44,7 @@ export interface PlantDetail {
   light: string[] | null
   soil_texture: string[] | null
   soil_drainage: string[] | null
+  soil_ph: string[] | null
   watering_need: string | null
   growth_rate: string | null
   maintenance: string | null
