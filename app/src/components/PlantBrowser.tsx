@@ -80,16 +80,33 @@ export function PlantBrowser() {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
 
   useEffect(() => {
+    let cancelled = false
     setLoading(true)
-    supabase
-      .from('plants')
-      .select(COLS)
-      .order('genus')
-      .range(0, 4999)
-      .then(({ data }) => {
-        setAllPlants((data ?? []) as unknown as PlantRow[])
+
+    async function fetchAll() {
+      // The Supabase project caps each response at 1000 rows (PostgREST's
+      // "Max Rows" setting) no matter how large a .range() is requested, so
+      // pull the full dataset in pages instead of relying on one big fetch.
+      const pageSize = 1000
+      const rows: PlantRow[] = []
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await supabase
+          .from('plants')
+          .select(COLS)
+          .order('genus')
+          .range(offset, offset + pageSize - 1)
+        if (error || !data) break
+        rows.push(...(data as unknown as PlantRow[]))
+        if (data.length < pageSize) break
+      }
+      if (!cancelled) {
+        setAllPlants(rows)
         setLoading(false)
-      })
+      }
+    }
+
+    fetchAll()
+    return () => { cancelled = true }
   }, [])
 
   const facetGroups = useMemo(() => buildFacetGroups(allPlants), [allPlants])
