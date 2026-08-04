@@ -17,14 +17,65 @@ interface PlantRow extends FacetPlant {
   plant_media: { original_url: string; is_primary: boolean }[]
 }
 
-const COLS = `
+// Plant columns only — no joined tables. plant_common_names/plant_media are
+// fetched separately and merged in JS (see fetchAllPlants below): joining
+// them here makes every page of the paginated plants query pay for a nested
+// aggregate, and that cost grows with OFFSET until it blows the statement
+// timeout on later pages.
+const PLANT_COLS = `
   id, genus, species, cultivar, taxonomic_type, life_cycle,
   height_min_ft, height_max_ft,
   light, soil_texture, soil_drainage, soil_ph,
   bloom_seasons, flower_color, attracts, maintenance, growth_rate,
-  usda_hardiness_zone_min, usda_hardiness_zone_max,
-  plant_common_names(name, is_primary), plant_media(original_url, is_primary)
+  usda_hardiness_zone_min, usda_hardiness_zone_max
 `
+
+const PAGE_SIZE = 1000
+
+// Supabase's PostgREST caps every response at PAGE_SIZE rows regardless of
+// the requested .range(), so pull each table in pages and concatenate.
+async function fetchAllRows<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const rows: T[] = []
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const { data, error } = await page(offset, offset + PAGE_SIZE - 1)
+    if (error || !data) break
+    rows.push(...data)
+    if (data.length < PAGE_SIZE) break
+  }
+  return rows
+}
+
+async function fetchAllPlants(): Promise<PlantRow[]> {
+  const [plants, names, media] = await Promise.all([
+    fetchAllRows<Omit<PlantRow, 'plant_common_names' | 'plant_media'>>((from, to) =>
+      supabase.from('plants').select(PLANT_COLS).order('genus').range(from, to) as any),
+    fetchAllRows<{ plant_id: string; name: string; is_primary: boolean }>((from, to) =>
+      supabase.from('plant_common_names').select('plant_id, name, is_primary').range(from, to)),
+    fetchAllRows<{ plant_id: string; original_url: string; is_primary: boolean }>((from, to) =>
+      supabase.from('plant_media').select('plant_id, original_url, is_primary').range(from, to)),
+  ])
+
+  const namesByPlant = new Map<string, { name: string; is_primary: boolean }[]>()
+  for (const n of names) {
+    const arr = namesByPlant.get(n.plant_id) ?? []
+    arr.push({ name: n.name, is_primary: n.is_primary })
+    namesByPlant.set(n.plant_id, arr)
+  }
+  const mediaByPlant = new Map<string, { original_url: string; is_primary: boolean }[]>()
+  for (const m of media) {
+    const arr = mediaByPlant.get(m.plant_id) ?? []
+    arr.push({ original_url: m.original_url, is_primary: m.is_primary })
+    mediaByPlant.set(m.plant_id, arr)
+  }
+
+  return plants.map(p => ({
+    ...p,
+    plant_common_names: namesByPlant.get(p.id) ?? [],
+    plant_media: mediaByPlant.get(p.id) ?? [],
+  }))
+}
 
 const SORTS = [
   { key: 'name', label: 'Name (A–Z)' },
@@ -82,30 +133,12 @@ export function PlantBrowser() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-
-    async function fetchAll() {
-      // The Supabase project caps each response at 1000 rows (PostgREST's
-      // "Max Rows" setting) no matter how large a .range() is requested, so
-      // pull the full dataset in pages instead of relying on one big fetch.
-      const pageSize = 1000
-      const rows: PlantRow[] = []
-      for (let offset = 0; ; offset += pageSize) {
-        const { data, error } = await supabase
-          .from('plants')
-          .select(COLS)
-          .order('genus')
-          .range(offset, offset + pageSize - 1)
-        if (error || !data) break
-        rows.push(...(data as unknown as PlantRow[]))
-        if (data.length < pageSize) break
-      }
+    fetchAllPlants().then(rows => {
       if (!cancelled) {
         setAllPlants(rows)
         setLoading(false)
       }
-    }
-
-    fetchAll()
+    })
     return () => { cancelled = true }
   }, [])
 
