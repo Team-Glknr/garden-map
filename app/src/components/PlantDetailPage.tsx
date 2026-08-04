@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Star, X } from 'lucide-react'
 import { usePlantDetail } from '../hooks/usePlantDetail'
-import { getPlantColors } from '../lib/plantIcons'
+import { supabase } from '../lib/supabase'
+import { getPlantColors, getPlantIcon } from '../lib/plantIcons'
 import { primaryName, scientificName } from '../lib/plantDisplay'
 import {
   EditableField, EditableTextarea, EditableTags, EditableNumberRange, EditableBoolean, EditableChildTags,
@@ -16,6 +17,49 @@ interface Props {
   onPrev: (() => void) | null
   onNext: (() => void) | null
   onClose: () => void
+  onSelectPlant: (plantId: string) => void
+}
+
+interface RelatedPlantSummary {
+  id: string
+  name: string
+  scientificName: string
+  taxonomicType: string
+  photo: string | null
+}
+
+function useRelatedPlantSummaries(relationships: PlantRelationship[]): Record<string, RelatedPlantSummary> {
+  const relatedIds = useMemo(
+    () => Array.from(new Set(relationships.map(r => r.related_plant_id).filter((id): id is string => !!id))),
+    [relationships],
+  )
+  const [summaries, setSummaries] = useState<Record<string, RelatedPlantSummary>>({})
+
+  useEffect(() => {
+    if (!relatedIds.length) { setSummaries({}); return }
+    let cancelled = false
+    supabase
+      .from('plants')
+      .select('id, genus, species, cultivar, taxonomic_type, plant_common_names(name, is_primary), plant_media(original_url, is_primary)')
+      .in('id', relatedIds)
+      .then(({ data }) => {
+        if (cancelled || !data) return
+        const map: Record<string, RelatedPlantSummary> = {}
+        for (const row of data as any[]) {
+          map[row.id] = {
+            id: row.id,
+            name: primaryName(row),
+            scientificName: scientificName(row),
+            taxonomicType: row.taxonomic_type,
+            photo: row.plant_media?.find((m: any) => m.is_primary)?.original_url ?? row.plant_media?.[0]?.original_url ?? null,
+          }
+        }
+        setSummaries(map)
+      })
+    return () => { cancelled = true }
+  }, [relatedIds])
+
+  return summaries
 }
 
 const WOODY_TYPES = ['Tree', 'Shrub', 'Vine']
@@ -117,14 +161,74 @@ function PestDiseaseList({
   )
 }
 
-function RelationshipList({
-  items,
-  onAdd,
+function RelatedPlantCard({
+  label,
+  summary,
+  fallbackText,
+  onSelect,
   onRemove,
 }: {
+  label: string
+  summary: RelatedPlantSummary | undefined
+  fallbackText: string | null
+  onSelect: (() => void) | null
+  onRemove: () => void
+}) {
+  const colors = summary ? getPlantColors(summary.taxonomicType) : { bg: '#f1f5f9', fg: '#475569' }
+  const Icon = summary ? getPlantIcon(summary.taxonomicType) : null
+
+  return (
+    <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-lg pl-2 pr-3 py-2">
+      {onSelect ? (
+        <button onClick={onSelect} className="group/related flex items-center gap-3 flex-1 min-w-0 text-left">
+          <span className="w-10 h-10 rounded-md overflow-hidden bg-stone-100 flex items-center justify-center shrink-0">
+            {summary!.photo ? (
+              <img src={summary!.photo} alt={summary!.name} loading="lazy" className="w-full h-full object-cover" />
+            ) : (
+              <span className="flex items-center justify-center w-full h-full" style={{ backgroundColor: colors.bg, color: colors.fg }}>
+                {Icon && <Icon size={16} />}
+              </span>
+            )}
+          </span>
+          <div className="min-w-0">
+            <div className="text-[10px] text-stone-400">{label}</div>
+            <div className="text-sm font-medium text-stone-700 truncate group-hover/related:underline">{summary!.name}</div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {summary!.scientificName !== summary!.name && (
+                <span className="text-[11px] italic text-stone-400 truncate">{summary!.scientificName}</span>
+              )}
+              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: colors.bg, color: colors.fg }}>
+                {summary!.taxonomicType}
+              </span>
+            </div>
+          </div>
+        </button>
+      ) : (
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <span className="w-10 h-10 rounded-md bg-stone-100 shrink-0" />
+          <div className="min-w-0">
+            <div className="text-[10px] text-stone-400">{label}</div>
+            <div className="text-sm font-medium text-stone-700 truncate">{fallbackText}</div>
+          </div>
+        </div>
+      )}
+      <button onClick={onRemove} className="text-stone-300 hover:text-red-500 shrink-0"><X size={12} /></button>
+    </div>
+  )
+}
+
+function RelationshipList({
+  items,
+  summaries,
+  onAdd,
+  onRemove,
+  onSelectPlant,
+}: {
   items: PlantRelationship[]
+  summaries: Record<string, RelatedPlantSummary>
   onAdd: (type: PlantRelationship['relationship_type'], text: string) => void
   onRemove: (id: string) => void
+  onSelectPlant: (plantId: string) => void
 }) {
   const [adding, setAdding] = useState(false)
   const [type, setType] = useState<PlantRelationship['relationship_type']>('similar_to')
@@ -137,15 +241,20 @@ function RelationshipList({
   }
 
   return (
-    <div className="flex flex-col gap-1.5 mt-3">
-      {items.map(item => (
-        <div key={item.id} className="flex items-center gap-2 text-xs">
-          <span className="text-stone-400">{RELATIONSHIP_LABELS[item.relationship_type]}</span>
-          <span className="text-stone-700 font-medium">{item.related_name_text}</span>
-          {item.related_plant_id && <span className="text-[10px] text-green-600">linked</span>}
-          <button onClick={() => onRemove(item.id)} className="text-stone-300 hover:text-red-500 ml-auto"><X size={11} /></button>
-        </div>
-      ))}
+    <div className="flex flex-col gap-2 mt-3">
+      {items.map(item => {
+        const summary = item.related_plant_id ? summaries[item.related_plant_id] : undefined
+        return (
+          <RelatedPlantCard
+            key={item.id}
+            label={RELATIONSHIP_LABELS[item.relationship_type]}
+            summary={summary}
+            fallbackText={item.related_name_text}
+            onSelect={summary ? () => onSelectPlant(summary.id) : null}
+            onRemove={() => onRemove(item.id)}
+          />
+        )
+      })}
       {adding ? (
         <div className="flex items-center gap-2">
           <select
@@ -174,7 +283,7 @@ function RelationshipList({
   )
 }
 
-export function PlantDetailPage({ plantId, index, total, onPrev, onNext, onClose }: Props) {
+export function PlantDetailPage({ plantId, index, total, onPrev, onNext, onClose, onSelectPlant }: Props) {
   const {
     plant, loading, updatePlant,
     addCommonName, removeCommonName, setPrimaryCommonName,
@@ -186,6 +295,7 @@ export function PlantDetailPage({ plantId, index, total, onPrev, onNext, onClose
     addPestDisease, removePestDisease,
     addRelationship, removeRelationship,
   } = usePlantDetail(plantId)
+  const relatedSummaries = useRelatedPlantSummaries(plant?.plant_relationships ?? [])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -486,7 +596,13 @@ export function PlantDetailPage({ plantId, index, total, onPrev, onNext, onClose
 
           {/* Related plants */}
           <SectionLabel>Related Plants</SectionLabel>
-          <RelationshipList items={plant.plant_relationships} onAdd={addRelationship} onRemove={removeRelationship} />
+          <RelationshipList
+            items={plant.plant_relationships}
+            summaries={relatedSummaries}
+            onAdd={addRelationship}
+            onRemove={removeRelationship}
+            onSelectPlant={onSelectPlant}
+          />
 
           {/* Other notes */}
           <SectionLabel>Other Notes</SectionLabel>

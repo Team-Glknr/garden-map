@@ -128,7 +128,7 @@ export function PlantBrowser() {
   const [zone, setZone] = useState<number | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>(DEFAULT_EXPANDED)
   const [zoneExpanded, setZoneExpanded] = useState(false)
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -183,7 +183,7 @@ export function PlantBrowser() {
     return out
   }, [filters, zone])
 
-  const selectedPlant = selectedIndex != null ? filteredResults[selectedIndex] : null
+  const selectedIndex = selectedPlantId != null ? filteredResults.findIndex(p => p.id === selectedPlantId) : -1
 
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -320,7 +320,7 @@ export function PlantBrowser() {
             </div>
           )}
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
-            {filteredResults.map((p, i) => {
+            {filteredResults.map(p => {
               const colors = getPlantColors(p.taxonomic_type)
               const Icon = getPlantIcon(p.taxonomic_type)
               const name = displayName(p)
@@ -329,7 +329,7 @@ export function PlantBrowser() {
               return (
                 <button
                   key={p.id}
-                  onClick={() => setSelectedIndex(i)}
+                  onClick={() => setSelectedPlantId(p.id)}
                   className="text-left bg-white border border-stone-200 rounded-lg p-3 transition-all flex flex-col gap-2 hover:border-stone-300 hover:shadow-sm"
                 >
                   <div className="relative w-full aspect-[4/3] rounded-md overflow-hidden bg-stone-100 flex items-center justify-center shrink-0">
@@ -372,14 +372,15 @@ export function PlantBrowser() {
       </div>
 
       {/* Full-page detail overlay */}
-      {selectedPlant && selectedIndex != null && (
+      {selectedPlantId && (
         <PlantDetailPage
-          plantId={selectedPlant.id}
+          plantId={selectedPlantId}
           index={selectedIndex}
-          total={filteredResults.length}
-          onPrev={selectedIndex > 0 ? () => setSelectedIndex(selectedIndex - 1) : null}
-          onNext={selectedIndex < filteredResults.length - 1 ? () => setSelectedIndex(selectedIndex + 1) : null}
-          onClose={() => setSelectedIndex(null)}
+          total={selectedIndex !== -1 ? filteredResults.length : 0}
+          onPrev={selectedIndex > 0 ? () => setSelectedPlantId(filteredResults[selectedIndex - 1].id) : null}
+          onNext={selectedIndex !== -1 && selectedIndex < filteredResults.length - 1 ? () => setSelectedPlantId(filteredResults[selectedIndex + 1].id) : null}
+          onClose={() => setSelectedPlantId(null)}
+          onSelectPlant={setSelectedPlantId}
         />
       )}
     </div>
