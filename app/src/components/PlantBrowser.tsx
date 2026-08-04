@@ -14,6 +14,7 @@ interface PlantRow {
   height_max_ft: number | null
   light: string[] | null
   plant_common_names: { name: string; is_primary: boolean }[]
+  plant_media: { original_url: string; is_primary: boolean }[]
 }
 
 const TYPES = ['Tree', 'Shrub', 'Herbaceous Perennial', 'Annual', 'Vine', 'Bulb', 'Fern', 'Ground Cover', 'Ornamental Grass']
@@ -37,6 +38,10 @@ function displayName(p: PlantRow): string {
 
 function scientificName(p: PlantRow): string {
   return [p.genus, p.species, p.cultivar ? `'${p.cultivar}'` : null].filter(Boolean).join(' ')
+}
+
+function primaryPhoto(p: PlantRow): string | null {
+  return p.plant_media?.find(m => m.is_primary)?.original_url ?? p.plant_media?.[0]?.original_url ?? null
 }
 
 function heightLabel(p: PlantRow): string {
@@ -79,7 +84,7 @@ export function PlantBrowser() {
     setSearching(true)
     const timer = setTimeout(async () => {
       const q = query.trim()
-      const cols = 'id, genus, species, cultivar, taxonomic_type, height_min_ft, height_max_ft, light, plant_common_names(name, is_primary)'
+      const cols = 'id, genus, species, cultivar, taxonomic_type, height_min_ft, height_max_ft, light, plant_common_names(name, is_primary), plant_media(original_url, is_primary)'
       let request = supabase
         .from('plants')
         .select(cols)
@@ -191,6 +196,7 @@ export function PlantBrowser() {
               const isSelected = p.id === selectedId
               const name = displayName(p)
               const sci = scientificName(p)
+              const photo = primaryPhoto(p)
               return (
                 <button
                   key={p.id}
@@ -199,16 +205,22 @@ export function PlantBrowser() {
                     isSelected ? 'border-green-400 ring-2 ring-green-200' : 'border-stone-200 hover:border-stone-300 hover:shadow-sm'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="relative w-full aspect-[4/3] rounded-md overflow-hidden bg-stone-100 flex items-center justify-center shrink-0">
+                    {photo ? (
+                      <img src={photo} alt={name} loading="lazy" className="w-full h-full object-cover" />
+                    ) : (
+                      <span
+                        className="flex items-center justify-center w-9 h-9 rounded-full"
+                        style={{ backgroundColor: colors.bg, color: colors.fg }}
+                      >
+                        <Icon size={18} />
+                      </span>
+                    )}
                     <span
-                      className="flex items-center justify-center w-9 h-9 rounded-full shrink-0"
-                      style={{ backgroundColor: colors.bg, color: colors.fg }}
-                    >
-                      <Icon size={18} />
-                    </span>
-                    <span
-                      className="text-[9px] font-medium px-1.5 py-0.5 rounded shrink-0"
-                      style={{ backgroundColor: colors.bg, color: colors.fg }}
+                      className="absolute top-1 right-1 text-[9px] font-medium px-1.5 py-0.5 rounded shrink-0"
+                      style={photo
+                        ? { backgroundColor: 'rgba(255,255,255,0.9)', color: colors.fg }
+                        : { backgroundColor: colors.bg, color: colors.fg }}
                     >
                       {p.taxonomic_type}
                     </span>

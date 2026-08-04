@@ -10,7 +10,8 @@ const PLANT_SELECT = `
   flower_color, bloom_seasons, bloom_window_text, bloom_start_md, bloom_end_md,
   leaf_color, deciduous_fall_color, foliage_color, dieback_start_md, regrowth_start_md,
   attracts, wildlife_value, ecological_tags,
-  plant_common_names(name, is_primary)
+  plant_common_names(name, is_primary),
+  plant_media(original_url, caption, photographer, license_name, license_url, is_primary)
 `
 
 export function usePlantDetail(plantId: string | null) {

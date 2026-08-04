@@ -171,6 +171,10 @@ function scientificName(p: PlantDetail): string {
   return [p.genus, p.species, p.cultivar ? `'${p.cultivar}'` : null].filter(Boolean).join(' ')
 }
 
+function primaryPhoto(p: PlantDetail) {
+  return p.plant_media?.find(m => m.is_primary) ?? p.plant_media?.[0] ?? null
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function PlantDetailPanel({ plantId, planting, onUpdatePlanting, onRemovePlanting, onClose }: Props) {
@@ -211,6 +215,39 @@ export function PlantDetailPanel({ plantId, planting, onUpdatePlanting, onRemove
 
         {plant && (
           <>
+            {/* Photo */}
+            {(() => {
+              const photo = primaryPhoto(plant)
+              if (!photo) return null
+              return (
+                <div className="mb-3">
+                  <img
+                    src={photo.original_url}
+                    alt={photo.caption ?? primaryName(plant)}
+                    className="w-full rounded-md object-cover max-h-48"
+                  />
+                  {(photo.photographer || photo.license_name) && (
+                    <p className="text-[10px] text-stone-400 mt-1">
+                      {photo.caption && <span>{photo.caption} — </span>}
+                      {photo.photographer && <span>{photo.photographer}</span>}
+                      {photo.license_name && (
+                        <>
+                          {photo.photographer && ', '}
+                          {photo.license_url ? (
+                            <a href={photo.license_url} target="_blank" rel="noopener noreferrer" className="underline hover:text-stone-600">
+                              {photo.license_name}
+                            </a>
+                          ) : (
+                            <span>{photo.license_name}</span>
+                          )}
+                        </>
+                      )}
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
+
             {/* Description */}
             {plant.description && (
               <p className="text-xs text-stone-500 leading-relaxed">{plant.description}</p>

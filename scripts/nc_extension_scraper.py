@@ -404,6 +404,38 @@ def parse_distribution(dist_str: str) -> list[str]:
     return [s.strip() for s in re.split(r"[,\s]+", dist_str) if re.match(r"[A-Z]{2}", s.strip())]
 
 
+def parse_media(html: str) -> list[dict]:
+    """Extract gallery photos (figure blocks) — url, caption, photographer, license."""
+    main = main_content(html)
+    gallery = re.search(r'<div class="gallery_box">(.*?)<div class="gallery_thumbs"', main, re.DOTALL)
+    if not gallery:
+        return []
+    media = []
+    for i, fig in enumerate(re.findall(r"<figure[^>]*>(.*?)</figure>", gallery.group(1), re.DOTALL)):
+        src = re.search(r'<img[^>]*\bsrc="([^"]+)"', fig)
+        if not src:
+            continue
+        def attr(name: str) -> str | None:
+            m = re.search(rf'{name}="([^"]*)"', fig)
+            return html_module.unescape(m.group(1)) if m and m.group(1) else None
+
+        license_html = attr("data-license") or ""
+        license_link = re.search(r'href=\'([^\']+)\'', license_html)
+        license_name = clean(license_html) or None
+
+        entry = {
+            "original_url": html_module.unescape(src.group(1)),
+            "caption": attr("data-caption"),
+            "photographer": attr("data-attrib"),
+            "license_name": license_name,
+            "license_url": license_link.group(1) if license_link else None,
+            "is_primary": i == 0,
+            "source": "nc_extension",
+        }
+        media.append({k: v for k, v in entry.items() if v is not None and v != ""})
+    return media
+
+
 def parse_plant(slug: str, html: str) -> dict:
     fields = parse_dt_dd(html)
     identity = parse_identity(html)
@@ -512,6 +544,8 @@ def parse_plant(slug: str, html: str) -> dict:
         "phonetic_spelling": first("Phonetic Spelling"),
         # Relationships
         "relationships": relationships,
+        # Media
+        "media": parse_media(html),
         # Pests / diseases
         **{f"pest_disease_{k}": v
            for k, v in parse_pest_disease(html).items() if v},

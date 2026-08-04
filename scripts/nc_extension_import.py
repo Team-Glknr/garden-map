@@ -234,8 +234,10 @@ def transform(plant: dict) -> dict:
         "_common_names":      plant.get("common_names") or [],
         "_synonyms":          plant.get("synonyms") or [],
         "_phonetic_spelling": plant.get("phonetic_spelling"),
-        "_state_distribution": [c for c in (plant.get("state_distribution") or [])
-                                if len(c) == 2 and c.isalpha()],
+        "_state_distribution": list(dict.fromkeys(
+            c for c in (plant.get("state_distribution") or [])
+            if len(c) == 2 and c.isalpha()
+        )),
         "_relationships":     plant.get("relationships") or [],
         "_pests":             plant.get("pest_disease_insects") or [],
         "_diseases":          plant.get("pest_disease_diseases") or [],
@@ -243,6 +245,7 @@ def transform(plant: dict) -> dict:
         "_woody_leaf_characteristics": plant.get("woody_leaf_characteristics"),
         "_bark_color":        plant.get("bark_color") or None,
         "_bark_description":  plant.get("bark_description"),
+        "_media":             plant.get("media") or [],
     }
 
 
@@ -383,6 +386,24 @@ def insert_related(cur, plant_id: str, rec: dict) -> None:
             (plant_id, rec["_propagation"]),
         )
 
+    # Media (photos) — NC Extension image URLs are signed S3 links that expire;
+    # re-import periodically or re-host before the Expires timestamp passes.
+    if rec["_media"]:
+        cur.execute(
+            "DELETE FROM plant_media WHERE plant_id = %s AND source = 'nc_extension'",
+            (plant_id,),
+        )
+        for m in rec["_media"]:
+            cur.execute(
+                """INSERT INTO plant_media
+                   (plant_id, media_type, original_url, caption, photographer,
+                    license_name, license_url, is_primary, source)
+                   VALUES (%s, 'image', %s, %s, %s, %s, %s, %s, %s)""",
+                (plant_id, m.get("original_url"), m.get("caption"),
+                 m.get("photographer"), m.get("license_name"), m.get("license_url"),
+                 m.get("is_primary", False), m.get("source", "nc_extension")),
+            )
+
 
 def resolve_relationships(cur) -> int:
     """Second pass: fill in related_plant_id where the related plant is now in DB."""
@@ -455,22 +476,23 @@ def run(args):
 
     inserted = updated = errors = 0
     try:
-        with conn:
-            with conn.cursor() as cur:
-                for i, rec in enumerate(records, 1):
-                    try:
-                        plant_id = upsert_plant(cur, rec)
-                        insert_related(cur, plant_id, rec)
-                        inserted += 1
-                        if i % 100 == 0:
-                            print(f"  {i}/{len(records)} done", flush=True)
-                    except Exception as e:
-                        errors += 1
-                        print(f"  ERROR [{rec['nc_extension_slug']}]: {e}")
-                        conn.rollback()
+        with conn.cursor() as cur:
+            for i, rec in enumerate(records, 1):
+                try:
+                    plant_id = upsert_plant(cur, rec)
+                    insert_related(cur, plant_id, rec)
+                    conn.commit()
+                    inserted += 1
+                    if i % 100 == 0:
+                        print(f"  {i}/{len(records)} done", flush=True)
+                except Exception as e:
+                    errors += 1
+                    print(f"  ERROR [{rec['nc_extension_slug']}]: {e}")
+                    conn.rollback()
 
-                resolved = resolve_relationships(cur)
-                print(f"Resolved {resolved} plant relationships")
+            resolved = resolve_relationships(cur)
+            conn.commit()
+            print(f"Resolved {resolved} plant relationships")
 
         print(f"\nDone: {inserted} upserted, {errors} errors")
     finally:
