@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { X, Pencil, Trash2, Plus, Star } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { X, Pencil, Trash2, Plus, Star, ChevronLeft, ChevronRight } from 'lucide-react'
 import { PlantMedia } from '../types'
 import { ft } from '../lib/plantDisplay'
 
@@ -330,8 +330,20 @@ export function PhotoManager({
 }) {
   const [uploading, setUploading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const sorted = [...media].sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
   const primary = sorted[0]
+
+  useEffect(() => {
+    if (lightboxIndex === null) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setLightboxIndex(null)
+      if (e.key === 'ArrowLeft') setLightboxIndex(i => (i === null ? i : (i - 1 + sorted.length) % sorted.length))
+      if (e.key === 'ArrowRight') setLightboxIndex(i => (i === null ? i : (i + 1) % sorted.length))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightboxIndex, sorted.length])
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -359,9 +371,14 @@ export function PhotoManager({
   return (
     <div className="mb-3">
       <div className="grid grid-cols-3 gap-1.5">
-        {sorted.map(m => (
+        {sorted.map((m, i) => (
           <div key={m.id} className="relative group aspect-square rounded-md overflow-hidden bg-stone-100">
-            <img src={m.original_url} alt={m.caption ?? altBase} className="w-full h-full object-cover" />
+            <img
+              src={m.original_url}
+              alt={m.caption ?? altBase}
+              onClick={() => setLightboxIndex(i)}
+              className="w-full h-full object-cover cursor-pointer"
+            />
             {m.is_primary && (
               <span className="absolute bottom-1 left-1 text-[8px] bg-white/90 text-green-700 rounded px-1 py-0.5">Primary</span>
             )}
@@ -403,6 +420,41 @@ export function PhotoManager({
             </>
           )}
         </p>
+      )}
+      {lightboxIndex !== null && (
+        <div
+          className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center"
+          onClick={() => setLightboxIndex(null)}
+        >
+          <button
+            onClick={() => setLightboxIndex(null)}
+            className="absolute top-4 right-4 text-white/70 hover:text-white"
+          >
+            <X size={24} />
+          </button>
+          {sorted.length > 1 && (
+            <button
+              onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i === null ? i : (i - 1 + sorted.length) % sorted.length)) }}
+              className="absolute left-4 text-white/70 hover:text-white"
+            >
+              <ChevronLeft size={32} />
+            </button>
+          )}
+          <img
+            src={sorted[lightboxIndex].original_url}
+            alt={sorted[lightboxIndex].caption ?? altBase}
+            onClick={e => e.stopPropagation()}
+            className="max-w-[90vw] max-h-[90vh] object-contain"
+          />
+          {sorted.length > 1 && (
+            <button
+              onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i === null ? i : (i + 1) % sorted.length)) }}
+              className="absolute right-4 text-white/70 hover:text-white"
+            >
+              <ChevronRight size={32} />
+            </button>
+          )}
+        </div>
       )}
     </div>
   )
