@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { ArrowLeft, ChevronLeft, ChevronRight, Star, X } from 'lucide-react'
 import { usePlantDetail } from '../hooks/usePlantDetail'
-import { getPlantColors, getPlantIcon } from '../lib/plantIcons'
+import { getPlantColors } from '../lib/plantIcons'
 import { primaryName, scientificName } from '../lib/plantDisplay'
 import {
   EditableField, EditableTextarea, EditableTags, EditableNumberRange,
@@ -54,8 +54,6 @@ export function PlantDetailPage({ plantId, index, total, onPrev, onNext, onClose
   }, [onClose])
 
   const colors = plant ? getPlantColors(plant.taxonomic_type) : { bg: '#f1f5f9', fg: '#475569' }
-  const Icon = plant ? getPlantIcon(plant.taxonomic_type) : null
-  const photo = plant?.plant_media?.find(m => m.is_primary) ?? plant?.plant_media?.[0] ?? null
 
   return (
     <div className="fixed inset-0 bg-stone-50 z-50 overflow-y-auto">
@@ -91,15 +89,7 @@ export function PlantDetailPage({ plantId, index, total, onPrev, onNext, onClose
         <div className="max-w-3xl mx-auto px-6 pt-9 pb-20">
           {/* Hero */}
           <div className="flex gap-5 items-start">
-            <div
-              className="w-28 h-28 rounded-2xl shrink-0 overflow-hidden flex items-center justify-center"
-              style={{ backgroundColor: photo ? undefined : colors.bg }}
-            >
-              {photo
-                ? <img src={photo.original_url} alt={primaryName(plant)} className="w-full h-full object-cover" />
-                : Icon && <Icon size={40} color={colors.fg} />}
-            </div>
-            <div className="min-w-0 flex-1 pt-1">
+            <div className="min-w-0 flex-1">
               <span
                 className="inline-block text-[11px] font-semibold px-2.5 py-1 rounded-full"
                 style={{ backgroundColor: colors.bg, color: colors.fg }}
