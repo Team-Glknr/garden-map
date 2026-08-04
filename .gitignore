@@ -8,3 +8,4 @@ data/nc_extension/html/
 data/nc_extension/plants/
 data/nc_extension/slugs.json
 data/nc_extension_plants.jsonl
+.vercel

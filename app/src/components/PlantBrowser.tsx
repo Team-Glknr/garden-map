@@ -89,7 +89,7 @@ export function PlantBrowser() {
         .from('plants')
         .select(cols)
         .order('genus')
-        .limit(150)
+        .range(0, 4999)
 
       if (typeFilter) request = request.eq('taxonomic_type', typeFilter)
 

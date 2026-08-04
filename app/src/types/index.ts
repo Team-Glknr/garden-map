@@ -62,11 +62,18 @@ export interface PlantDetail {
   attracts: string[] | null
   wildlife_value: string | null
   ecological_tags: string[] | null
-  plant_common_names: { name: string; is_primary: boolean }[]
+  plant_common_names: PlantCommonName[]
   plant_media: PlantMedia[]
 }
 
+export interface PlantCommonName {
+  id: string
+  name: string
+  is_primary: boolean
+}
+
 export interface PlantMedia {
+  id: string
   original_url: string
   caption: string | null
   photographer: string | null

@@ -386,23 +386,30 @@ def insert_related(cur, plant_id: str, rec: dict) -> None:
             (plant_id, rec["_propagation"]),
         )
 
-    # Media (photos) — NC Extension image URLs are signed S3 links that expire;
-    # re-import periodically or re-host before the Expires timestamp passes.
+    # Media (photos) — NC Extension image URLs are signed S3 links that expire
+    # quickly; nc_extension_photos.py re-hosts a permanent copy separately. If
+    # that's already happened for this plant, leave it alone — don't clobber
+    # a hosted URL with a dead one from the raw scrape.
     if rec["_media"]:
         cur.execute(
-            "DELETE FROM plant_media WHERE plant_id = %s AND source = 'nc_extension'",
-            (plant_id,),
+            "SELECT 1 FROM plant_media WHERE plant_id = %s AND original_url LIKE %s LIMIT 1",
+            (plant_id, "%/storage/v1/object/public/%"),
         )
-        for m in rec["_media"]:
+        if not cur.fetchone():
             cur.execute(
-                """INSERT INTO plant_media
-                   (plant_id, media_type, original_url, caption, photographer,
-                    license_name, license_url, is_primary, source)
-                   VALUES (%s, 'image', %s, %s, %s, %s, %s, %s, %s)""",
-                (plant_id, m.get("original_url"), m.get("caption"),
-                 m.get("photographer"), m.get("license_name"), m.get("license_url"),
-                 m.get("is_primary", False), m.get("source", "nc_extension")),
+                "DELETE FROM plant_media WHERE plant_id = %s AND source = 'nc_extension'",
+                (plant_id,),
             )
+            for m in rec["_media"]:
+                cur.execute(
+                    """INSERT INTO plant_media
+                       (plant_id, media_type, original_url, caption, photographer,
+                        license_name, license_url, is_primary, source)
+                       VALUES (%s, 'image', %s, %s, %s, %s, %s, %s, %s)""",
+                    (plant_id, m.get("original_url"), m.get("caption"),
+                     m.get("photographer"), m.get("license_name"), m.get("license_url"),
+                     m.get("is_primary", False), m.get("source", "nc_extension")),
+                )
 
 
 def resolve_relationships(cur) -> int:
