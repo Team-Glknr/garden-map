@@ -6,6 +6,95 @@ import { ft } from '../lib/plantDisplay'
 export const LIGHT_OPTIONS = ['Full Sun', 'Full Sun to Partial Shade', 'Partial Shade', 'Partial Shade to Full Shade', 'Full Shade']
 export const SEASON_OPTIONS = ['Spring', 'Summer', 'Fall', 'Winter']
 
+// ── Tri-state boolean (Unknown / Yes / No) ──────────────────────────────────
+
+export function EditableBoolean({
+  value,
+  onSave,
+}: {
+  value: boolean | null
+  onSave: (v: boolean | null) => void
+}) {
+  function cycle() {
+    onSave(value === null ? true : value === true ? false : null)
+  }
+  const label = value === null ? 'Unknown' : value ? 'Yes' : 'No'
+  const color = value === null ? 'text-stone-400' : value ? 'text-green-700' : 'text-stone-500'
+  return (
+    <button onClick={cycle} className={`flex items-center gap-1 group text-xs font-medium ${color}`}>
+      {label}
+      <Pencil size={9} className="text-stone-300 group-hover:text-stone-500 shrink-0" />
+    </button>
+  )
+}
+
+// ── Tag list backed by a child table (per-item add/remove, not whole-array save) ─
+
+export function EditableChildTags({
+  values,
+  onAdd,
+  onRemove,
+  options,
+  placeholder = 'Add…',
+}: {
+  values: string[]
+  onAdd: (v: string) => void
+  onRemove: (v: string) => void
+  options?: string[]
+  placeholder?: string
+}) {
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  function commitAdd(v: string) {
+    const trimmed = v.trim()
+    if (trimmed && !values.includes(trimmed)) onAdd(trimmed)
+    setDraft('')
+    setAdding(false)
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {values.map(v => (
+        <span key={v} className="group/tag flex items-center gap-1 text-[10px] bg-stone-100 text-stone-600 rounded px-1.5 py-0.5">
+          {v}
+          <button onClick={() => onRemove(v)} className="text-stone-300 group-hover/tag:text-red-500">
+            <X size={9} />
+          </button>
+        </span>
+      ))}
+      {adding ? (
+        options ? (
+          <select
+            autoFocus
+            defaultValue=""
+            onChange={e => commitAdd(e.target.value)}
+            onBlur={() => setAdding(false)}
+            className="text-[10px] border border-green-400 rounded px-1 py-0.5 focus:outline-none"
+          >
+            <option value="" disabled>Choose…</option>
+            {options.filter(o => !values.includes(o)).map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        ) : (
+          <input
+            autoFocus
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={() => (draft.trim() ? commitAdd(draft) : setAdding(false))}
+            onKeyDown={e => { if (e.key === 'Enter') commitAdd(draft); if (e.key === 'Escape') setAdding(false) }}
+            placeholder={placeholder}
+            className="text-[10px] border border-green-400 rounded px-1 py-0.5 w-20 focus:outline-none"
+          />
+        )
+      ) : (
+        <button onClick={() => setAdding(true)} className="text-stone-300 hover:text-stone-500">
+          <Plus size={11} />
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ── Inline editable field ────────────────────────────────────────────────────
 
 export function EditableField({
