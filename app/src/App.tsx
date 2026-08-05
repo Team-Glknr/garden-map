@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Routes, Route } from 'react-router-dom'
 import { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { SignIn } from './components/SignIn'
@@ -70,5 +71,12 @@ export default function App() {
     )
   }
 
-  return session ? <GardenApp session={session} /> : <SignIn />
+  if (!session) return <SignIn />
+
+  return (
+    <Routes>
+      <Route path="/plants/:plantId" element={<GardenApp session={session} />} />
+      <Route path="*" element={<GardenApp session={session} />} />
+    </Routes>
+  )
 }

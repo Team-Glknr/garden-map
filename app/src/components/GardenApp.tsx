@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Session } from '@supabase/supabase-js'
 import { LogOut, Mountain, Waves, Sun, Sprout } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -28,7 +29,10 @@ interface Props {
 }
 
 export function GardenApp({ session }: Props) {
-  const [view, setView] = useState<AppView>('garden')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const view: AppView = location.pathname.startsWith('/plants') ? 'plants' : 'garden'
+  const setView = (v: AppView) => navigate(v === 'plants' ? '/plants' : '/')
   const { yards, loading, createYard } = useYards()
   const [activeYard, setActiveYard] = useState<Yard | null>(null)
 

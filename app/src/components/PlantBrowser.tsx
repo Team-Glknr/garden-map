@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Search, ArrowUpDown, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { getPlantIcon, getPlantColors } from '../lib/plantIcons'
@@ -128,7 +129,9 @@ export function PlantBrowser() {
   const [zone, setZone] = useState<number | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>(DEFAULT_EXPANDED)
   const [zoneExpanded, setZoneExpanded] = useState(false)
-  const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null)
+  const { plantId: selectedPlantId = null } = useParams<{ plantId: string }>()
+  const navigate = useNavigate()
+  const setSelectedPlantId = (id: string | null) => navigate(id ? `/plants/${id}` : '/plants')
 
   useEffect(() => {
     let cancelled = false
